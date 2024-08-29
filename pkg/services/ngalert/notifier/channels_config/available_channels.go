@@ -128,6 +128,14 @@ func GetAvailableNotifiers() []*NotifierPlugin {
 					Required:     true,
 				},
 				{
+					Label:        "Secret",
+					Element:      ElementTypeInput,
+					InputType:    InputTypeText,
+					Placeholder:  "Dingding robot secret(if enabled)",
+					PropertyName: "secret",
+					Required:     false,
+				},
+				{
 					Label:        "Message Type",
 					Element:      ElementTypeSelect,
 					PropertyName: "msgType",

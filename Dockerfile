@@ -1,16 +1,16 @@
-# syntax=docker/dockerfile:1
+# syntax=192.168.6.99/docker/dockerfile:1
 
-ARG BASE_IMAGE=alpine:3.19.1
-ARG JS_IMAGE=node:20-alpine
+ARG BASE_IMAGE=192.168.6.99/library/alpine:3.19.1
+ARG JS_IMAGE=192.168.6.99/library/node:20-alpine
 ARG JS_PLATFORM=linux/amd64
-ARG GO_IMAGE=golang:1.23.0-alpine
+ARG GO_IMAGE=192.168.6.99/library/golang:1.23.0-alpine
 
 ARG GO_SRC=go-builder
 ARG JS_SRC=js-builder
 
 FROM --platform=${JS_PLATFORM} ${JS_IMAGE} as js-builder
 
-ENV NODE_OPTIONS=--max_old_space_size=8000
+ENV NODE_OPTIONS="--max_old_space_size=8000"
 
 WORKDIR /tmp/grafana
 
@@ -22,9 +22,11 @@ COPY public public
 COPY LICENSE ./
 COPY conf/defaults.ini ./conf/defaults.ini
 
-RUN apk add --no-cache make build-base python3
+RUN sed -i s/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g /etc/apk/repositories && \
+    npm config set registry https://registry.npmmirror.com && \
+    apk add --no-cache make build-base python3
 
-RUN yarn install --immutable
+RUN NODE_OPTIONS="--dns-result-order=ipv4first" yarn install --immutable
 
 COPY tsconfig.json .eslintrc .editorconfig .browserslistrc .prettierrc.js ./
 COPY scripts scripts
@@ -41,13 +43,11 @@ ARG GO_BUILD_TAGS="oss"
 ARG WIRE_TAGS="oss"
 ARG BINGO="true"
 
-RUN if grep -i -q alpine /etc/issue; then \
-      apk add --no-cache \
-          # This is required to allow building on arm64 due to https://github.com/golang/go/issues/22040
-          binutils-gold \
-          bash \
-          # Install build dependencies
-          gcc g++ make git; \
+# Install build dependencies
+RUN sed -i s/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g /etc/apk/repositories && \
+    go env -w GOPROXY=https://goproxy.cn,direct && \
+    if grep -i -q alpine /etc/issue; then \
+      apk add --no-cache gcc g++ make git; \
     fi
 
 WORKDIR /tmp/grafana
@@ -84,6 +84,7 @@ COPY pkg pkg
 COPY scripts scripts
 COPY conf conf
 COPY .github .github
+COPY LICENSE ./
 
 ENV COMMIT_SHA=${COMMIT_SHA}
 ENV BUILD_BRANCH=${BUILD_BRANCH}
@@ -137,13 +138,18 @@ RUN if grep -i -q alpine /etc/issue; then \
       echo 'ERROR: Unsupported base image' && /bin/false; \
     fi
 
+# Add for GFW
+COPY fxxkgfw/sgerrand.rsa.pub /etc/apk/keys/sgerrand.rsa.pub
+COPY fxxkgfw/glibc-2.35-r0.apk /tmp/glibc-2.35-r0.apk
+COPY fxxkgfw/glibc-bin-2.35-r0.apk /tmp/glibc-bin-2.35-r0.apk
+
 # glibc support for alpine x86_64 only
 RUN if grep -i -q alpine /etc/issue && [ `arch` = "x86_64" ]; then \
-      wget -q -O /etc/apk/keys/sgerrand.rsa.pub https://alpine-pkgs.sgerrand.com/sgerrand.rsa.pub && \
-      wget https://github.com/sgerrand/alpine-pkg-glibc/releases/download/2.35-r0/glibc-2.35-r0.apk \
-        -O /tmp/glibc-2.35-r0.apk && \
-      wget https://github.com/sgerrand/alpine-pkg-glibc/releases/download/2.35-r0/glibc-bin-2.35-r0.apk \
-        -O /tmp/glibc-bin-2.35-r0.apk && \
+      #wget -q -O /etc/apk/keys/sgerrand.rsa.pub https://alpine-pkgs.sgerrand.com/sgerrand.rsa.pub && \
+      #wget https://github.com/sgerrand/alpine-pkg-glibc/releases/download/2.35-r0/glibc-2.35-r0.apk \
+      #  -O /tmp/glibc-2.35-r0.apk && \
+      #wget https://github.com/sgerrand/alpine-pkg-glibc/releases/download/2.35-r0/glibc-bin-2.35-r0.apk \
+      #  -O /tmp/glibc-bin-2.35-r0.apk && \
       apk add --force-overwrite --no-cache /tmp/glibc-2.35-r0.apk /tmp/glibc-bin-2.35-r0.apk && \
       rm -f /lib64/ld-linux-x86-64.so.2 && \
       ln -s /usr/glibc-compat/lib64/ld-linux-x86-64.so.2 /lib64/ld-linux-x86-64.so.2 && \
@@ -185,7 +191,7 @@ RUN if [ ! $(getent group "$GF_GID") ]; then \
 
 COPY --from=go-src /tmp/grafana/bin/grafana* /tmp/grafana/bin/*/grafana* ./bin/
 COPY --from=js-src /tmp/grafana/public ./public
-COPY --from=js-src /tmp/grafana/LICENSE ./
+COPY --from=go-src /tmp/grafana/LICENSE ./
 
 EXPOSE 3000
 

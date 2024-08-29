@@ -320,6 +320,8 @@ build-docker-full: ## Build Docker image for development.
 	tar -ch . | \
 	docker buildx build - \
 	--platform $(PLATFORM) \
+	--progress plain \
+	--cache-to=type=local,dest=/cache \
 	--build-arg BINGO=false \
 	--build-arg GO_BUILD_TAGS=$(GO_BUILD_TAGS) \
 	--build-arg WIRE_TAGS=$(WIRE_TAGS) \
